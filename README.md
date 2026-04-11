@@ -21,6 +21,8 @@ go get github.com/labeth/ears-lint-go
 ```go
 func LintEars(text string, catalog Catalog, options *Options) LintResult
 func LintEarsBatch(items [][2]string, catalog Catalog, options *Options) []LintResult
+func LintCatalogCoverage(items [][2]string, catalog Catalog, options *Options) []Diagnostic
+func LintCatalogCoverageFromResults(results []LintResult, catalog Catalog, options *Options) []Diagnostic
 ```
 
 `LintEarsBatch` input item format:
@@ -289,6 +291,7 @@ This is the full set of codes currently emitted by implementation.
 Generated as:
 - `catalog.<role>_unresolved`
 - `catalog.<role>_ambiguous`
+- `catalog.term_unreferenced` (from catalog coverage lint in strict mode)
 
 Roles currently emitted from this parser pipeline:
 - `system`

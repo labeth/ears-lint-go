@@ -13,8 +13,11 @@ func LintCatalogCoverage(items [][2]string, catalog Catalog, options *Options) [
 	if len(items) == 0 || opts.Mode != ModeStrict {
 		return nil
 	}
-	results := LintEarsBatch(items, catalog, &opts)
-	return LintCatalogCoverageFromResults(results, catalog, &opts)
+	texts := make([]string, 0, len(items))
+	for _, item := range items {
+		texts = append(texts, item[1])
+	}
+	return lintCatalogCoverageTexts(texts, catalog)
 }
 
 // LintCatalogCoverageFromResults lints catalog-term coverage using already
@@ -25,21 +28,24 @@ func LintCatalogCoverageFromResults(results []LintResult, catalog Catalog, optio
 		return nil
 	}
 
-	referenced := map[string]bool{}
+	texts := make([]string, 0, len(results))
 	for _, res := range results {
-		for _, ref := range res.References {
-			if ref.Matched == nil {
-				continue
-			}
-			group := strings.TrimSpace(ref.Matched.Group)
-			id := strings.TrimSpace(ref.Matched.ID)
-			if group == "" || id == "" {
-				continue
-			}
-			referenced[group+":"+id] = true
+		if res.AST == nil {
+			continue
 		}
+		texts = append(texts, res.AST.Raw)
 	}
+	return lintCatalogCoverageTexts(texts, catalog)
+}
 
+func lintCatalogCoverageTexts(texts []string, catalog Catalog) []Diagnostic {
+	if len(texts) == 0 {
+		return nil
+	}
+	lowered := make([]string, 0, len(texts))
+	for _, t := range texts {
+		lowered = append(lowered, strings.ToLower(strings.TrimSpace(t)))
+	}
 	out := make([]Diagnostic, 0)
 	add := func(group string, entries []CatalogEntry) {
 		for _, e := range entries {
@@ -48,7 +54,7 @@ func LintCatalogCoverageFromResults(results []LintResult, catalog Catalog, optio
 			if id == "" || name == "" {
 				continue
 			}
-			if referenced[group+":"+id] {
+			if catalogEntryCovered(lowered, e) {
 				continue
 			}
 			out = append(out, Diagnostic{
@@ -69,4 +75,51 @@ func LintCatalogCoverageFromResults(results []LintResult, catalog Catalog, optio
 	add("dataTerms", catalog.DataTerms)
 
 	return sortDiagnostics(out)
+}
+
+func catalogEntryCovered(texts []string, entry CatalogEntry) bool {
+	candidates := []string{strings.TrimSpace(entry.Name)}
+	candidates = append(candidates, entry.Aliases...)
+	for _, c := range candidates {
+		term := strings.ToLower(strings.TrimSpace(c))
+		if term == "" {
+			continue
+		}
+		for _, text := range texts {
+			if containsPhrase(text, term) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func containsPhrase(text, phrase string) bool {
+	if text == "" || phrase == "" {
+		return false
+	}
+	from := 0
+	for {
+		i := strings.Index(text[from:], phrase)
+		if i < 0 {
+			return false
+		}
+		start := from + i
+		end := start + len(phrase)
+		if phraseBoundary(text, start-1) && phraseBoundary(text, end) {
+			return true
+		}
+		from = end
+		if from >= len(text) {
+			return false
+		}
+	}
+}
+
+func phraseBoundary(s string, idx int) bool {
+	if idx < 0 || idx >= len(s) {
+		return true
+	}
+	b := s[idx]
+	return !((b >= 'a' && b <= 'z') || (b >= '0' && b <= '9'))
 }

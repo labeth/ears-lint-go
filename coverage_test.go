@@ -54,3 +54,24 @@ func TestLintCatalogCoverage_NoWarningsInGuidedMode(t *testing.T) {
 		t.Fatalf("expected no coverage diagnostics in guided mode, got: %+v", diags)
 	}
 }
+
+func TestLintCatalogCoverage_CoversTermsInResponseText(t *testing.T) {
+	catalog := Catalog{
+		Systems: []CatalogEntry{
+			{ID: "SYS-A", Name: "aircraft system"},
+		},
+		DataTerms: []CatalogEntry{
+			{ID: "DATA-REV-STATUS", Name: "reverse status"},
+		},
+	}
+	items := [][2]string{
+		{"REQ-1", "When reverse thrust is commanded, the aircraft system shall publish reverse status."},
+	}
+
+	diags := LintCatalogCoverage(items, catalog, &Options{Mode: ModeStrict})
+	for _, d := range diags {
+		if d.Code == "catalog.term_unreferenced" && d.Message == `catalog dataTerms term "reverse status" (DATA-REV-STATUS) is not referenced by any requirement text` {
+			t.Fatalf("did not expect reverse status to be unreferenced, got: %+v", diags)
+		}
+	}
+}
